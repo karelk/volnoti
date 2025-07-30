@@ -182,7 +182,7 @@ static void print_usage(const char* filename, int failure) {
 
 int main(int argc, char* argv[]) {
     Settings settings = get_default_settings();
-    int timeout = 3;
+    int timeout = 1;
     
     void *options = gopt_sort(&argc, (const char**) argv, gopt_start(
             gopt_option('h', 0, gopt_shorts('h', '?'), gopt_longs("help", "HELP")),

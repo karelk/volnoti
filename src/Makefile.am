@@ -10,6 +10,7 @@ AM_CPPFLAGS = \
               @GTK_CFLAGS@ \
               @CAIRO_CFLAGS@ \
               @GDK_PIXBUF_CFLAGS@ \
+              @ALSA_CFLAGS@ \
               -DPREFIX="\"$(datarootdir)/pixmaps/@PACKAGE@/\""
 
 COMMON = common.c common.h gopt.c gopt.h
@@ -28,7 +29,8 @@ volnoti_LDADD = \
 volnoti_show_SOURCES = client.c value-client-stub.h $(COMMON)
 volnoti_show_LDADD = \
                      @DBUS_LIBS@ \
-                     @DBUS_GLIB_LIBS@
+                     @DBUS_GLIB_LIBS@ \
+                     @ALSA_LIBS@
 
 interface_xml = specs.xml
 

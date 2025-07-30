@@ -21,18 +21,78 @@
 #include <glib.h>
 #include <dbus/dbus-glib.h>
 #include <unistd.h>
+#include <alsa/asoundlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "gopt.h"
 
 #include "value-client-stub.h"
 
+static int get_alsa_volume(int card, int *volume, int *muted) {
+    snd_mixer_t *handle;
+    snd_mixer_selem_id_t *sid;
+    const char *card_name;
+    snd_mixer_elem_t *elem;
+    long pmin, pmax, vol;
+    int switch_val;
+    char card_dev[32];
+    
+    snprintf(card_dev, sizeof(card_dev), "hw:%d", card);
+    
+    if (snd_mixer_open(&handle, 0) < 0) {
+        return -1;
+    }
+    
+    if (snd_mixer_attach(handle, card_dev) < 0) {
+        snd_mixer_close(handle);
+        return -1;
+    }
+    
+    if (snd_mixer_selem_register(handle, NULL, NULL) < 0) {
+        snd_mixer_close(handle);
+        return -1;
+    }
+    
+    if (snd_mixer_load(handle) < 0) {
+        snd_mixer_close(handle);
+        return -1;
+    }
+    
+    snd_mixer_selem_id_alloca(&sid);
+    snd_mixer_selem_id_set_index(sid, 0);
+    snd_mixer_selem_id_set_name(sid, "Master");
+    
+    elem = snd_mixer_find_selem(handle, sid);
+    if (!elem) {
+        snd_mixer_close(handle);
+        return -1;
+    }
+    
+    snd_mixer_selem_get_playback_volume_range(elem, &pmin, &pmax);
+    snd_mixer_selem_get_playback_volume(elem, SND_MIXER_SCHN_MONO, &vol);
+    
+    *volume = (int)((vol * 100) / (pmax - pmin));
+    
+    if (snd_mixer_selem_has_playback_switch(elem)) {
+        snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &switch_val);
+        *muted = !switch_val;
+    } else {
+        *muted = 0;
+    }
+    
+    snd_mixer_close(handle);
+    return 0;
+}
+
 static void print_usage(const char* filename, int failure) {
-    g_print("Usage: %s [-v] [-m] <volume>\n"
-            " -h\t--help\t\thelp\n"
-            " -v\t--verbose\tverbose\n"
-            " -m\t--mute\t\tmuted\n"
-            " <volume>\t\tint 0-100\n", filename);
+    g_print("Usage: %s [-v] [-m] [-a] [-c <card>] [<volume>]\n"
+            " -h\t\t--help\t\t\thelp\n"
+            " -v\t\t--verbose\t\tverbose\n"
+            " -m\t\t--mute\t\t\tmuted\n"
+            " -a\t\t--auto\t\t\tauto-detect current volume\n"
+            " -c <card>\t--card <card>\t\tALSA card number (default: 0)\n"
+            " <volume>\t\t\t\tint 0-100 (not needed with -a)\n", filename);
     if (failure)
         exit(EXIT_FAILURE);
     else
@@ -43,37 +103,68 @@ int main(int argc, const char* argv[]) {
     void *options = gopt_sort(&argc, argv, gopt_start(
             gopt_option('h', 0, gopt_shorts('h', '?'), gopt_longs("help", "HELP")),
             gopt_option('m', 0, gopt_shorts('m'), gopt_longs("mute")),
+            gopt_option('a', 0, gopt_shorts('a'), gopt_longs("auto")),
+            gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("card")),
             gopt_option('v', GOPT_REPEAT, gopt_shorts('v'), gopt_longs("verbose"))));
     int help = gopt(options, 'h');
     int debug = gopt(options, 'v');
     int muted = gopt(options, 'm');
+    int auto_detect = gopt(options, 'a');
+    int card = 0;
+    
+    if (gopt(options, 'c')) {
+        if (sscanf(gopt_arg_i(options, 'c', 0), "%d", &card) != 1) {
+            gopt_free(options);
+            print_usage(argv[0], TRUE);
+        }
+    }
+    
     gopt_free(options);
 
     if (help)
         print_usage(argv[0], FALSE);
 
     gint volume;
-    if (muted) {
-        if (argc > 2) {
-            print_usage(argv[0], TRUE);
-        } else if (argc == 2) {
+    int alsa_muted = 0;
+    
+    if (auto_detect) {
+        // Auto-detect volume from ALSA
+        if (get_alsa_volume(card, &volume, &alsa_muted) < 0) {
+            g_print("Error: Failed to get volume from ALSA card %d\n", card);
+            return EXIT_FAILURE;
+        }
+        // Override muted flag if ALSA reports muted
+        if (alsa_muted) {
+            muted = TRUE;
+        }
+        if (debug) {
+            g_print("Auto-detected: Volume=%d%%, Muted=%s, Card=%d\n", 
+                    volume, muted ? "yes" : "no", card);
+        }
+    } else {
+        // Manual volume specification (original behavior)
+        if (muted) {
+            if (argc > 2) {
+                print_usage(argv[0], TRUE);
+            } else if (argc == 2) {
+                if (sscanf(argv[1], "%d", &volume) != 1)
+                    print_usage(argv[0], TRUE);
+
+                if (volume > 100 || volume < 0)
+                    print_usage(argv[0], TRUE);
+            } else {
+                volume = 0;
+            }
+        } else {
+            if (argc != 2)
+                print_usage(argv[0], TRUE);
+
             if (sscanf(argv[1], "%d", &volume) != 1)
                 print_usage(argv[0], TRUE);
 
             if (volume > 100 || volume < 0)
                 print_usage(argv[0], TRUE);
-        } else {
-            volume = 0;
         }
-    } else {
-        if (argc != 2)
-            print_usage(argv[0], TRUE);
-
-        if (sscanf(argv[1], "%d", &volume) != 1)
-            print_usage(argv[0], TRUE);
-
-        if (volume > 100 || volume < 0)
-            print_usage(argv[0], TRUE);
     }
 
     DBusGConnection *bus = NULL;

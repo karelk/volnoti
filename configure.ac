@@ -19,6 +19,7 @@ PKG_CHECK_MODULES([DBUS_GLIB], [dbus-glib-1])
 PKG_CHECK_MODULES([GTK], [gtk+-2.0])
 PKG_CHECK_MODULES([CAIRO], [cairo])
 PKG_CHECK_MODULES([GDK_PIXBUF], [gdk-pixbuf-2.0])
+PKG_CHECK_MODULES([ALSA], [alsa])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
