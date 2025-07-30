@@ -1,0 +1,57 @@
+# Build files
+*.o
+*.lo
+*.la
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+# Autotools generated files
+/configure
+/config.h
+/config.h.in
+/config.log
+/config.status
+/stamp-h1
+/Makefile
+/Makefile.in
+/aclocal.m4
+/autom4te.cache/
+/compile
+/config.guess
+/config.sub
+/depcomp
+/install-sh
+/missing
+/ltmain.sh
+/libtool
+/.deps/
+/.libs/
+
+# Build output directories
+.deps/
+.libs/
+
+# Generated binaries
+/src/volnoti
+/src/volnoti-show
+
+# Distribution files
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*~
+.#*
+\#*#
